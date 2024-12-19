@@ -1,0 +1,94 @@
+commands:
+  - exec:
+      commandLine: sh -c '/commands/000-podman-auth.sh || true'
+      component: developer-image
+      label: 000 - Sync Podman Authentication.
+      workingDir: /home/user
+    id: 000-podman-auth
+  - exec:
+      commandLine: sh /commands/001-reload-devfile.sh
+      component: developer-image
+      label: 001 - Reload local devfile in $PROJECT_SOURCE
+      workingDir: $PROJECT_SOURCE
+    id: 001-reload-devfile
+  - exec:
+      commandLine: sh /commands/002-podman-run.sh
+      component: developer-image
+      label: 002 - Launch podman run
+      workingDir: $PROJECT_SOURCE
+    id: 002-podman-run
+  - exec:
+      commandLine: /commands/003-restart-kubedock.sh
+      component: developer-image
+      label: 003 - Restart kubedock
+      workingDir: $PROJECT_SOURCE
+    id: 003-kubedock-restart
+  - exec:
+      commandLine: sh -c '/commands/004-kubeconfig.sh || true'
+      component: developer-image
+      label: 004 - Set kubeconfig permission
+      workingDir: $PROJECT_SOURCE
+    id: 004-kubeconfig
+  - exec:
+      commandLine: sh -c '/commands/vscode/001-extensions.sh || true'
+      component: developer-image
+      label: VS Code - 001 - Set default extensions.
+      workingDir: /commands/vscode
+    id: vscode-001-set-default-extensions
+  - exec:
+      commandLine: sh -c '/commands/vscode/002-settings.sh || true'
+      component: developer-image
+      label: VS Code - 002 - Set default settings.
+      workingDir: /commands/vscode
+    id: vscode-002-set-default-settings
+components:
+  - attributes:
+      pod-overrides:
+        metadata:
+          labels:
+            devworkspace/name: base
+            devworkspace/type: developer-image
+    container:
+      cpuLimit: "2"
+      cpuRequest: "1"
+      endpoints:
+        - exposure: none
+          name: kubedock
+          protocol: tcp
+          targetPort: 2475
+      env:
+        - name: KUBEDOCK_ENABLED
+          value: "true"
+        - name: PULL_POLICY
+          value: always
+        - name: INIT_IMAGE
+          value: ghcr.io/joyrex2001/kubedock:0.17.1
+        - name: KUBEDOCK_TIMEOUT
+          value: "120"
+        - name: KUBECONFIG
+          value: /home/user/.kube/config
+        - name: DOCKER_HOST
+          value: tcp://127.0.0.1:2475
+        - name: SSL_CERT_DIR
+          value: /var/run/secrets/kubernetes.io/serviceaccount
+      image: quay.io/edubois10/base-image:1.0.0
+      memoryLimit: 4G
+      memoryRequest: 1G
+      mountSources: true
+      sourceMapping: /projects
+      volumeMounts: []
+    name: developer-image
+events:
+  postStart:
+    - 000-podman-auth
+    - 004-kubeconfig
+    - vscode-001-set-default-extensions
+    - vscode-002-set-default-settings
+  preStart: []
+metadata:
+  description: Base Devfile for OpenShift DevSpace.
+  displayName: Base Devfile
+  name: base-devfile
+  version: 1.1.0
+projects: []
+schemaVersion: 2.3.0
