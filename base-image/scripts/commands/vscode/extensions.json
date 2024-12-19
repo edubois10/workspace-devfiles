@@ -1,0 +1,26 @@
+{
+    "recommendations": [
+        "42Crunch.vscode-openapi",
+        "DavidAnson.vscode-markdownlint",
+        "atlassian.atlascode",
+        "cnshenj.vscode-task-manager",
+        "cweijan.vscode-database-client2",
+        "dbaeumer.vscode-eslint",
+        "donjayamanne.githistory",
+        "eamodio.gitlens",
+        "esbenp.prettier-vscode",
+        "hediet.vscode-drawio",
+        "humao.rest-client",
+        "mhutchie.git-graph",
+        "ms-azuretools.vscode-docker",
+        "nicoespeon.abracadabra",
+        "redhat.vscode-openshift-connector",
+        "redhat.vscode-xml",
+        "redhat.vscode-yaml",
+        "streetsidesoftware.code-spell-checker",
+        "waderyan.gitblame",
+        "ms-kubernetes-tools.vscode-kubernetes-tools",
+        "Continue.continue",
+        "bpruitt-goddard.mermaid-markdown-syntax-highlighting"
+    ]
+}

@@ -1,0 +1,91 @@
+FROM registry.redhat.io/ubi9:latest
+
+ARG XQ_VERSION=1.2.5 \
+    YQ_VERSION=4.44.5 \
+    HELM_VERSION=3.16.3 \
+    BAT_VERSION=0.24.0 \
+    TKN_VERSION=latest \
+    KUBEDOCK_VERSION=0.17.1 \
+    SKAFFOLD_VERSION=latest \
+    VAULT_VERSION=1.18.2 \
+    OC_VERSION=latest \
+    GIT_CLIFF_VERSION=2.7.0 \
+    JUST_VERSION=1.37.0 \
+    KUSTOMIZE_VERSION=5.4.3 \
+    AWS_CLI_VERSION=latest
+
+USER 0
+
+# Install tools
+RUN cd /opt && \
+    curl -L https://github.com/sibprogrammer/xq/releases/download/v${XQ_VERSION}/xq_${XQ_VERSION}_linux_amd64.tar.gz | tar -xz -C /usr/local/bin/ xq && \
+    curl -L https://github.com/mikefarah/yq/releases/download/v${YQ_VERSION}/yq_linux_386 -o /usr/local/bin/yq && \
+    curl -L https://mirror.openshift.com/pub/openshift-v4/clients/ocp/${OC_VERSION}/openshift-client-linux.tar.gz | tar -xz -C /usr/local/bin/ oc kubectl && \
+    curl -L https://get.helm.sh/helm-v${HELM_VERSION}-linux-amd64.tar.gz | tar -xz linux-amd64/helm --to-stdout > /usr/local/bin/helm && \
+    curl -L https://github.com/sharkdp/bat/releases/download/v${BAT_VERSION}/bat-v${BAT_VERSION}-x86_64-unknown-linux-musl.tar.gz | tar -xz bat-v${BAT_VERSION}-x86_64-unknown-linux-musl/bat --to-stdout > /usr/local/bin/bat && \
+    curl -L https://mirror.openshift.com/pub/openshift-v4/clients/pipelines/${TKN_VERSION}/tkn-linux-amd64.tar.gz | tar -C /usr/local/bin -xz && \
+    curl -L https://github.com/joyrex2001/kubedock/releases/download/${KUBEDOCK_VERSION}/kubedock_${KUBEDOCK_VERSION}_linux_amd64.tar.gz | tar -C /usr/local/bin -xz && \
+    curl -Lo skaffold https://storage.googleapis.com/skaffold/releases/${SKAFFOLD_VERSION}/skaffold-linux-amd64 && \
+    curl -LO https://releases.hashicorp.com/vault/${VAULT_VERSION}/vault_${VAULT_VERSION}_linux_amd64.zip && unzip vault_${VAULT_VERSION}_linux_amd64.zip -d /usr/local/bin && rm -fr /opt/vault_${VAULT_VERSION}_linux_amd64.zip && \
+    curl -L https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv${KUSTOMIZE_VERSION}/kustomize_v${KUSTOMIZE_VERSION}_linux_amd64.tar.gz | tar -C /usr/local/bin -xz && \
+    curl -LO https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip && unzip awscli-exe-linux-x86_64.zip && ./aws/install && rm -fr /opt/awscli-exe-linux-x86_64.zip && \
+    echo 'export AWS_CA_BUNDLE=/etc/ssl/cert.pem' >> ${PROFILE_EXT} && \
+    mkdir cliff && curl -L https://github.com/orhun/git-cliff/releases/download/v${GIT_CLIFF_VERSION}/git-cliff-${GIT_CLIFF_VERSION}-x86_64-unknown-linux-gnu.tar.gz | tar xzC cliff --strip-components=1 && \
+    mkdir just && curl -L https://github.com/casey/just/releases/download/${JUST_VERSION}/just-${JUST_VERSION}-x86_64-unknown-linux-musl.tar.gz | tar xzC just && \
+    chmod +g+rx /usr/local/bin/xq && \
+    chmod +g+rx /usr/local/bin/yq && \
+    chmod +g+rx /usr/local/bin/oc && \
+    chmod +g+rx /usr/local/bin/helm && \
+    chmod +g+rx /usr/local/bin/bat && \
+    chmod +x /usr/local/bin/tkn /usr/local/bin/opc /usr/local/bin/tkn-pac && \
+    chmod +x /usr/local/bin/kubedock && \
+    install skaffold /usr/local/bin/ && rm -fr /opt/skaffold && \
+    install cliff/git-cliff /usr/local/bin/ && \
+        cp cliff/man/git-cliff.1 /usr/local/share/man/man1/ && \
+        cp cliff/completions/git-cliff.bash /usr/share/bash-completion/completions/git-cliff && \
+        cp cliff/completions/_git-cliff /usr/local/share/zsh/site-functions && \
+    install just/just /usr/local/bin/ && \
+        cp just/just.1 /usr/local/share/man/man1/ && \
+        cp just/completions/just.bash /usr/share/bash-completion/completions/just && \
+        cp just/completions/just.zsh /usr/local/share/zsh/site-functions/_just && \
+    chmod +x /usr/local/bin/vault && \
+    install starship /usr/local/bin/ && rm -fr /opt/starship && \
+    chmod +x /usr/local/bin/kustomize
+
+# Entrypoint
+COPY --chown=0:0 scripts/entrypoint.sh /entrypoint/base/entrypoint.sh
+# TODO: check why it is not using the base entrypoint
+# RUN ln -fs /entrypoint/base/entrypoint.sh /entrypoint.sh
+
+# Configure Podman wrapper
+COPY --chown=0:0 scripts/kubedock_setup.sh /usr/local/bin/kubedock_setup
+ENV PODMAN_WRAPPER_PATH=/usr/bin/podman.wrapper \
+    ORIGINAL_PODMAN_PATH=/usr/bin/podman.orig
+COPY --chown=0:0 scripts/podman-wrapper.sh "${PODMAN_WRAPPER_PATH}"
+RUN mv /usr/bin/podman "${ORIGINAL_PODMAN_PATH}"
+
+# Warp Commands
+COPY --chown=0:0 scripts/commands /commands
+
+# Symbolic link of podman_run
+RUN ln -s /commands/002-podman-run.sh /usr/bin/podman_run
+
+# oh-my-zsh 
+RUN git clone https://github.com/robbyrussell/oh-my-zsh.git /home/tooling/.oh-my-zsh && \
+    cp /home/tooling/.oh-my-zsh/templates/zshrc.zsh-template /home/tooling/.zshrc && \
+    chmod 660 /home/tooling/.zshrc && \
+    sed -i '1iZSH_DISABLE_COMPFIX=true' /home/tooling/.zshrc && \
+    sed -i '/^# DISABLE_MAGIC_FUNCTIONS.*/s/^#//' /home/tooling/.zshrc && \
+    echo "setopt PROMPT_CR" >> /home/tooling/.zshrc && \
+    echo "setopt PROMPT_SP" >> /home/tooling/.zshrc && \
+    echo "export PROMPT_EOL_MARK=\"\"" >> /home/tooling/.zshrc
+
+# Set permissions to allow arbitrary users to write
+RUN chgrp -R 0 /home && \
+    chmod -R g=u /home
+
+USER 10001
+
+# TODO: check why it is not using the base entrypoint
+# ENTRYPOINT [ "/entrypoint.sh" ]
+CMD ["/entrypoint/base/entrypoint.sh"]
